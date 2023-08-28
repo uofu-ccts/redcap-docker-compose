@@ -1,4 +1,6 @@
-FROM mysql:8.0-oracle
+FROM arm64v8/mariadb:10.11
+# https://hub.docker.com/_/mariadb
+#FROM mysql:8.0-oracle
 #FROM mysql:8.0
 #FROM mysql:5.7
 
