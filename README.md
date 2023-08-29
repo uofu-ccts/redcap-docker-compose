@@ -50,6 +50,8 @@ to have production-ready php settings.
  * Once `.env` file settings are correct, from the `rdc` folder type `docker compose up -d`
  * Open your web browser and goto `http://localhost` (or, in some cases with macs `http://127.0.0.1`) and follow
   directions for further installation
+ * (Initial build) - you will need to download the RedCAP code.  Use the BMIC general user and password.  
+Available from Randy
 
 :warning: **If you have a previous version of redcap-docker-compose make sure you change the `DOCKER_PREFIX` variable otherwise you may corrupt your existing installation.  Please see the full docs for more detail**
 
