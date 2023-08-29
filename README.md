@@ -45,9 +45,13 @@ to have production-ready php settings.
  [Visual Studio Code](https://code.visualstudio.com/),
  [Atom](https://atom.io/) - does not support xdebug, etc... )
  * Copy/Rename the `.env-example` to make a `.env` file - it is located in the `rdc` folder review the contents, making changes as necessary.
+ * (One time) - You may need to enable privileged port mapping in Docker Desktop
+   * Docker -> Setttings -> Advanced -> Enable privileged port mapping
  * Once `.env` file settings are correct, from the `rdc` folder type `docker compose up -d`
  * Open your web browser and goto `http://localhost` (or, in some cases with macs `http://127.0.0.1`) and follow
   directions for further installation
+ * (Initial build) - you will need to download the RedCAP code.  Use the BMIC general user and password.  
+Available from Randy
 
 :warning: **If you have a previous version of redcap-docker-compose make sure you change the `DOCKER_PREFIX` variable otherwise you may corrupt your existing installation.  Please see the full docs for more detail**
 
