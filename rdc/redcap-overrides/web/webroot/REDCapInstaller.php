@@ -146,6 +146,37 @@ class REDCapInstaller {
                         $redcap_version = $this->db_query("SELECT value FROM `redcap_config` WHERE field_name='redcap_version'")
                         ->fetch_assoc()['value'];
 
+                        // Set the Login Image
+                        $q = $this->db_query("UPDATE redcap_config set value = '/RDC_LOGO.png' where field_name='login_logo'");
+
+                        // Set the reporting mode to 0 (do not report stats to VUMC)
+                        $q = $this->db_query("UPDATE redcap_config set value = '0' where field_name='auto_report_stats'");
+                        $this->successes[] = "Turn off auto-reporting of statistics (turn back on if you want)";
+                        
+                        // Set server as development server
+                        $q = $this->db_query("UPDATE redcap_config set value = '1' where field_name='is_development_server'");
+                        $this->successes[] = "Set server type as development server";
+                        
+                        // Set autologout to never
+                        $q = $this->db_query("UPDATE redcap_config set value = '0' where field_name='autologout_timer'");
+                        $this->successes[] = "Set server logout time to never (to reduce headaches for local development)";
+                        
+                        // Set up the REDCap Instance Indicator EM
+                        $q = $this->db_query("INSERT INTO redcap_external_modules_downloads VALUES ('redcap_instance_indicator_v1.0.1',1607,now(), null)");
+                        $q = $this->db_query("INSERT INTO redcap_external_modules SET directory_prefix = 'redcap_instance_indicator'");
+                        $insert_id = $this->db_last_insert_id();
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'version', 'string', 'v1.0.1' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'enabled', 'boolean', 'false' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'discoverable-in-project', 'boolean', 'false' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'user-activate-permission', 'boolean', 'false' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'reserved-hide-from-non-admins-in-project-list', 'boolean', 'false' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_type', 'string', 'dev' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_position', 'string', 'tl' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_navbar', 'string', 'below' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_printable', 'boolean', 'false' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_custom', 'json-array', '[\"true\"]' )");
+                        $q = $this->db_query("INSERT INTO redcap_external_module_settings VALUES ($insert_id, null, 'indicator_navbar', 'string', 'below' )");
+                        
                         // Direct the user to the remainder of the REDCap install.php
                         $this->successes[] = "Installed $redcap_tables REDCap tables to " . $this->db . " on " . $this->hostname;
                         $nextUrl = $this->redcap_webroot_url . "redcap_v" . $redcap_version . "/ControlCenter/check.php";
@@ -275,6 +306,9 @@ class REDCapInstaller {
             $contents[] = '$password = "' . $this->password . '";';
             $contents[] = '$salt     = "' . $this->salt     . '";';
             $contents[] = '';
+            $contents[] = '// AN OPTIONAL INCLUDE FILE FOR ADDING CUSTOM CLASSES TO ALL OF REDCAP';
+            $contents[] = '// include_once debug/server_settings.php';
+            $contents[] = '';
 
             file_put_contents($dest_path . "database.php", implode("\n\t",$contents));
             return true;
@@ -298,7 +332,7 @@ class REDCapInstaller {
      */
     public function getInstallerVersions(){
         try {
-            $result = file_get_contents("https://redcap.vanderbilt.edu/plugins/redcap_consortium/versions.php");
+            $result = file_get_contents("https://redcap.vumc.org/plugins/redcap_consortium/versions.php");
             $results = json_decode($result,true);
             $opt_groups = array();
             foreach ($results as $branch => $versions) {
@@ -324,6 +358,14 @@ class REDCapInstaller {
     }
 
 
+    /**
+     * Wrapper for getting last insert id
+     * @return int
+     */
+    public function db_last_insert_id() {
+        return mysqli_insert_id($this->db_conn);
+    }
+    
 
     /**
      * Wrapper for running a query
@@ -373,7 +415,7 @@ class REDCapInstaller {
             list($branch,$version) = explode("--", $_POST['version']);
             if (empty($version)) throw new RuntimeException('Missing required version');
 
-            $url = 'https://redcap.vanderbilt.edu/plugins/redcap_consortium/versions.php';
+            $url = 'https://redcap.vumc.org/plugins/redcap_consortium/versions.php';
             $postdata = http_build_query(array(
                         'username' => $_POST['username'],
                         'password' => $_POST['password'],

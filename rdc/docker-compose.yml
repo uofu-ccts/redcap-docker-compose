@@ -1,20 +1,20 @@
-version: '3.7'
+name: REDCap-docker-compose
+
 services:
   web:
     container_name: ${DOCKER_PREFIX}_web
     build: ./docker-web
-    environment:
-      # For X-Debug to connect to your IDE, we need to resolve the IP of your laptop.  We use the host.docker.internal
-      # which will automatically resolve to the host on Docker containers.
-      XDEBUG_CONFIG: ${XDEBUG_CONFIG}
+    image: ${DOCKER_PREFIX}_web
     env_file: .env
     restart: always
     depends_on:
       - db
     ports:
       - 127.0.0.1:${WEB_PORT}:80
-#    extra_hosts:
-#      - "host.docker.internal:host-gateway"
+      - 127.0.0.1:${WEB_SSL_PORT}:443
+    # THIS IS NOT NEEDED (at least on a Mac -- but leaving it here because someone added it)
+    # extra_hosts:
+    #  - "host.docker.internal:host-gateway"
     volumes:
       - ${WEB_OVERRIDES}:/etc/container-config-override
       - ${WEBROOT_DIR}:/var/www/html
@@ -37,27 +37,29 @@ services:
 
   db:
     container_name: ${DOCKER_PREFIX}_db
-    build: ./docker-mysql
-#    environment:
-#      user: ${APACHE_RUN_USER_ID}
+    image: mysql:8.4-oracle
     env_file: ./.env
     restart: always
     cap_add:
       - SYS_NICE  # CAP_SYS_NICE
     volumes:
       - ${MYSQL_DIR}:/var/lib/mysql
-      - ${LOGS_DIR}/mysql:/var/log
-#      - ${MYSQL_OVERRIDES}:/etc/mysql/mysql.conf.d
+      # MOVED LOGS_DIR out of MYSQL subdir 
+      # - ${LOGS_DIR}/mysql:/var/log
+      - ${LOGS_DIR}:/var/log
       - ${MYSQL_OVERRIDES}:/etc/mysql/conf.d
       - ${MYSQL_SCRIPTS}:/docker-entrypoint-initdb.d/
+    # You can likely comment out this ports section unless you want to directly 
+    #connect to your database from your laptop
     ports:
-     - 127.0.0.1:${MYSQL_PORT}:3306
+      - 127.0.0.1:${MYSQL_PORT}:3306
     networks:
       - redcap_network
 
   cron:
     container_name: ${DOCKER_PREFIX}_cron
     build: ./docker-cron
+    image: ${DOCKER_PREFIX}_cron
     restart: always
     env_file: .env
     depends_on:
@@ -68,51 +70,53 @@ services:
     networks:
       - redcap_network
 
-  mailhog:
-    container_name: ${DOCKER_PREFIX}_mailhog
-    build: docker-mailhog
-    restart: always
-    env_file: .env
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ${DOCKER_PREFIX}_mail
+    restart: unless-stopped
+    volumes:
+      - ${LOGS_DIR}/mailpit_data:/data
     depends_on:
       - web
-    ports:
-      - 127.0.0.1:${MAILHOG_PORT}:8025
-    volumes:
-      - ${MAILHOG_DIR}:/maildir
+# No need to expose the mailpit services outside of the docker network
+#    ports:
+#      - 8025:8025
+#      - 1025:1025
     environment:
-      MH_STORAGE: maildir
-      MH_MAILDIR_PATH: /maildir
-      MH_OUTGOING_SMTP: /outgoing_smtp.json
-      MH_UI_WEB_PATH: mailhog
+      MP_MAX_MESSAGES: 5000
+      MP_WEBROOT: mail
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      TZ: ${TZ}
+      #Uncommenting below will enable the file relay config at /logs/mailpit_data/smtp_relay_config.yml
+      #MP_SMTP_RELAY_CONFIG: /data/smtp_relay_config.yml
     networks:
       - redcap_network
 
-  # THIS CONTAINER IS OPTIONAL IF YOU WANT TO HAVE PHPMYADMIN - OTHERWISE COMMENT IT OUT
-  phpmyadmin:
-    container_name: ${DOCKER_PREFIX}_phpmyadmin
-#    image: phpmyadmin/phpmyadmin
-    image: arm64v8/phpmyadmin
-    env_file: .env
-    environment:
-      - UPLOAD_LIMIT=128M
-    depends_on:
-      - db
-    #restart: always
-#    volumes:
-#      - ${PHPMYADMIN_PHP_OVERRIDES}:/usr/local/etc/php/conf.d/uploads.ini
-    ports:
-      - 127.0.0.1:${PHPMYADMIN_PORT}:80
-    networks:
-      - redcap_network
+  # THIS CONTAINER IS OPTIONAL IF YOU WANT TO HAVE PHPMYADMIN
+#   phpmyadmin:
+#     container_name: ${DOCKER_PREFIX}_phpmyadmin
+# # CHOOSE ONLY ONE OF THE IMAGE OPTIONS BELOW - USE ARM FOR APPLE SILICON
+# #    image: phpmyadmin/phpmyadmin
+# #    image: arm64v8/phpmyadmin
+#     env_file: .env
+#     environment:
+#       - UPLOAD_LIMIT=128M
+#     depends_on:
+#       - db
+#     #restart: always
+# #    volumes:
+# #      - ${PHPMYADMIN_PHP_OVERRIDES}:/usr/local/etc/php/conf.d/uploads.ini
+#     ports:
+#       - 127.0.0.1:${PHPMYADMIN_PORT}:80
+#     networks:
+#       - redcap_network
 
 volumes:
   mysql-volume:
     name: "${DOCKER_PREFIX}_mysql-volume"
-  logs-volume:
-    name: "${DOCKER_PREFIX}_logs-volume"
-  mailhog-volume:
-    name: "${DOCKER_PREFIX}_mailhog-volume"
 
 networks:
   redcap_network:
-    name: "${DOCKER_PREFIX}_redcap_network"
+    name: "${DOCKER_PREFIX}_network"

@@ -1,19 +1,38 @@
 <?php
+/**
+ * 
+ * This php file will scan your www directory and all subdirectories for git repositories
+ * and try to update them.  To do a dry-run, from the command line, you execute:
+ * php update_pull.php
+ * 
+ * This will tell you what it detects and what it will want to do.  If you agree,
+ * you can run:
+ * php update_pull.php true
+ * 
+ * and it will actually pull all of the modules specified.
+ *  
+ */
+function isCommandLineInterface()
+{
+    return (php_sapi_name() === 'cli');
+}
 
-// SCAN YOUR REDCAP TO SEE IF THERE ARE UPDATES TO BE HAD FORM GIT
+
+if (isCommandLineInterface()) {
+    $doUpdate = isset($argv[1]) && $argv[1] == "true";
+} else {
+    echo "<h3>Check Git Repos for Updates</h3>";
+    echo "<p>From the web, this will only show you what needs to be updated (provided the repos are public)</p>";
+    echo "To actually update the repos listed here, from your laptop's command line terminal goto:
+         <code>cd www/debug</code> and then run <code>php update_pull.php true</code></br><pre>";
+}
 
 
+// Because this file is in the /debug folder and we want to scan from the /www folder, I need to move up one level
+$base_dir = dirname(__DIR__, 1); 
 
-// Find all folders that have a .gitsubrepo folder
-
-$doUpdate = isset($argv[1]) && $argv[1] == "true";
-
-$dirs = scanDir::scan(__DIR__, ".git", true);
-
-
-
-// $files = array_slice($files,0,2); // DEBUG TEMP
-// echo print_r($dirs);
+// Scan all directories
+$dirs = scanDir::scan($base_dir, ".git", true);
 
 // Parse out subrepo information
 $subrepos = array();
@@ -21,8 +40,6 @@ $current = array();
 $behind = array();
 $other = array();
 $errors = array();
-
-
 $update = array();
 
 foreach ($dirs as $i => $dir) {
@@ -46,21 +63,7 @@ foreach ($dirs as $i => $dir) {
         $other[$dir] = $result;
         $status = "see details";
     }
-
     echo $status . "\n";
-
-
-    // // Open file
-    // $subrepo = $this->parseSubRepoFile($file);
-    // if (empty($subrepo)) continue;
-    //
-    // // Get path relative to repo root and full path
-    // $subrepo['relative_path'] = str_replace($this->repo_path . DIRECTORY_SEPARATOR, "", dirname($file));
-    // $subrepo['full_path'] = $file;
-    // // $subrepo['remote_name'] = basename($subrepo['remote']);
-    //
-    // // Add to list
-    // $subrepos[] = $subrepo;
 }
 
 if (!empty($errors)) {
@@ -73,11 +76,9 @@ if (!empty($other)) {
     echo "\n============= OTHER ISSUES =============\n";
     foreach ($other as $dir => $detail) {
         // echo json_encode($o) . "\n";
-        echo $dir . "\n";
+        echo $dir . "\n" . preg_replace('/^/m','   | ', preg_replace('/\n+/',"\n", $detail['output'])) . "\n";
     }
 }
-
-
 
 if (!empty($current)) {
     echo "\n============= CURRENT =============\n";
@@ -101,21 +102,6 @@ if (!empty($behind)) {
     }
 
 }
-
-
-// var_dump($errors);
-// var_dump($current);
-// var_dump($behind);
-// var_dump($other);
-
-
-
-// $this->log($files);
-// $this->log($subrepos);
-// $this->subrepos = $subrepos;
-
-
-
 
 
 /**
@@ -173,16 +159,16 @@ function syscall ($cmd, $cwd, $useBash = false)
 
 
 class scanDir {
-    static private $directories, $files, $ext_filter, $recursive, $dir_filter;
+    static private $directories, $files, $recursive, $ext_filter, $dir_filter;
 
     // ----------------------------------------------------------------------------------------------
-    // scan(dirpath::string|array, extensions::string|array, recursive::true|false,  skipDirs::array)
+    // scan(dirpath::string|array, extensions::string|array, recursive::true|false, $ext_filter::array, skipDirs::array)
     static public function scan(){
         // Initialize defaults
         self::$recursive = true;
         self::$directories = array();
         self::$files = array();
-        self::$ext_filter = false;
+        self::$ext_filter = array();
         self::$dir_filter = array();
 
         // Check we have minimum parameters

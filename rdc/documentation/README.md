@@ -6,14 +6,25 @@
 - [Overview](#overview)
   - [Docker-Compose Design](#docker-compose-design)
 - [Configuration](#configuration)
+  - [SSL Setup (optional)](#ssl-setup-optional)
+    - [Instructions](#instructions)
+    - [Next Steps](#next-steps)
   - [X-Debug Configuration (optional)](#x-debug-configuration-optional)
     - [Directions for PHPStorm:](#directions-for-phpstorm)
+    - [Instructions for Visual Studio Code](#instructions-for-visual-studio-code)
+- [Upgrading your REDCap-Docker-Compose localhost installation](#upgrading-your-redcap-docker-compose-localhost-installation)
+  - [Backup your current database](#backup-your-current-database)
+  - [Download and start the new REDCap Docker Compose](#download-and-start-the-new-redcap-docker-compose)
+  - [Import your database backup](#import-your-database-backup)
+  - [Copy over your www directory](#copy-over-your-www-directory)
+  - [Test if all is working!](#test-if-all-is-working)
 - [FAQ and Other Information](#faq-and-other-information)
   - [How do I upgrade to the latest version of redcap-docker-compose?](#how-do-i-upgrade-to-the-latest-version-of-redcap-docker-compose)
     - [A Clean Start](#a-clean-start)
     - [Migrating to the new version](#migrating-to-the-new-version)
   - [How do I prevent SMS messages from going out?](#how-do-i-prevent-sms-messages-from-going-out)
   - [Does this work with ARM64 processors, like the M1 or M2 "Apple Silicon" MACs?](#does-this-work-with-arm64-processors-like-the-m1-or-m2-apple-silicon-macs)
+  - [Adminer](#adminer)
   - [How do I stop phpMyAdmin](#how-do-i-stop-phpmyadmin)
   - [Connecting to the database](#connecting-to-the-database)
   - [Local URLS](#local-urls)
@@ -31,29 +42,31 @@
   - [How can I REALLY delete everything?](#how-can-i-really-delete-everything)
   - [How can I switch mysql versions?  For example, go from mySql 5.7 to mySql 8.0?](#how-can-i-switch-mysql-versions--for-example-go-from-mysql-57-to-mysql-80)
   - [Scanning External Modules for REPO Submission](#scanning-external-modules-for-repo-submission)
+  - [How do I work with git repositories as External Modules with Visual Studio Code (vsCode)?](#how-do-i-work-with-git-repositories-as-external-modules-with-visual-studio-code-vscode)
+  - [Any advice about working with repos you've cloned from GIT?](#any-advice-about-working-with-repos-youve-cloned-from-git)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Overview
 This docker-compose will build multiple docker containers as part of a server group to host REDCap on your local computer/server.
 The build consists of:
- * The official PHP-Apache docker image (Currently version 8.1)
+ * The official PHP-Apache docker image (Currently version 8.3)
  * The official MySql docker image (currently version 8.0)
- * A basic alpine-based MailHog image (for capturing outbound emails from REDCap for your review)
+ * Mailpit (for capturing outbound emails from REDCap for your review)
  * A basic alpine-based cron image (for running the REDCap cron and handling log rotation)
  * (optional) The official alpine-based PhpMyAdmin web-based mysql tool for managing the database.
-   * You can comment this out or stop the service after startup (see FAQ)
+   * This service is now commented out by default.  If you wish to use phpMyAdmin you can uncomment the entries from the `docker-compose.yml` file in the `/rdc/` directory
 
 The big advantage of this docker-based method is you can easily upgrade database versions, php versions, and see how
 these changes might affect your projects or custom code.  It also provides a nice mechanism for you and your development
-team to work in identical environments for consistency.
+team to work in identical environments for consistency.  Further, with advanced installations you could run many versions of php or REDCap simultenaously for testing.
 
 ### Docker-Compose Design
 This docker-compose script relies on a number of underlying images which are build or pulled to build your containers
 * docker-cron (built from Dockerfile)
-* docker-mailhog (built from Dockerfile)
 * docker-web (built from Dockerfile)
 * docker-db (built from Dockerfile as pulled official image)
+* mailpit (built from official image)
 * phpmyadmin image (pulled as official image)
 
 Those images that use Dockerfiles can be modified by tweaking the Dockerfile or scripts in each folder.  You must
@@ -71,15 +84,15 @@ script merges the overrides into the default folders, so to remove a default you
 ## Configuration
 1. Install docker on your machine.
    * Docker now requires that you create a user account.  Register.
-   * [Download the latest version of docker](https://docs.docker.com/get-docker/) desktop for your platform:
+   * [Download the latest version of docker](https://docs.docker.com/get-started/get-docker/) desktop for your platform:
      * For PC, I had to install the latest WSL2 Linux kernel update package and restart but gui walks you through 
      the process.  Also, upon launching VS Code, I installed the WSL extension.
 1. Download a zip of this repository [andy123/redcap-docker-compose](https://github.com/123andy/redcap-docker-compose)
    to your computer.  If you plan on contributing to the project, you may instead want to fork it and then clone your
-   fork so you can push changes and issue a pull request to the main repo.  Otherwise, just use the ZIP option.
-   * A zip file is available here: [zip download](https://github.com/123andy/redcap-docker-compose/archive/master.zip)
+   fork so you can push changes and issue a pull request to the main repo.  Otherwise, just use the ZIP option.  You can chose the Master branch of some of the few releases.
+   * A zip file of the latest commit is available here: [zip download](https://github.com/123andy/redcap-docker-compose/archive/master.zip)
    * Unzip this into a good place on your computer (e.g. desktop or documents)
-      * On my Mac, I put it in a folder called 'redcap' under my user directory `~/redcap/`
+      * On my Mac, I put it in a folder called 'redcap' under my user directory `~/REDCap/`
 1. INSTALL A GOOD IDE.  This really makes things easier.  I can recommend:
    * [phpStorm](https://www.jetbrains.com/phpstorm/),
    * [Visual Studio Code](https://code.visualstudio.com/),
@@ -135,22 +148,91 @@ script merges the overrides into the default folders, so to remove a default you
        Then I access the server at http://redcap.local
      * PC Instructions: edit `C:\Windows\System32\drivers\etc\hosts` and make the same change as above.  You will have
        to be an administrator to save the file (or VS Code helps you)
+     * If you want to be able to use SSL on your localhost without errors - there is now a [special section with instructions](#ssl-setup-optional)
 1. You need a copy of the REDCap Installer.
    * If you are a member of the REDCap Consortium Community, you can:
-      1. [Download](https://community.projectredcap.org/page/download.html) the latest full installer as a zip file.
+      1. [Download](https://redcap.vumc.org/community/custom/download.php) the latest full installer as a zip file.
       2. Alternately, if you know your community username and password, there is a built-in setup tool that can complete
       the installation for you.
         * You can find your community username under your community profile (typically something like jane.b.doe)
    * If you do not have an access code for the Community Consortium, you can ask your local site's REDCap administrator
    to provide you with a copy of the latest FULL ZIP installer (provide the instructions above).
       * If your institution has a license you should be able to install a local development version under that license
-      * If you represent your institution, you can request a community account [here](https://community.projectredcap.org/articles/26/getting-started-introduction-learning-the-basics.html)
-   * If you are not affiliated with an institution that has a license with REDCap, you CANNOT access the source code and will be unable to use this tool.  You can contact REDCap to request a license [here](https://project-redcap.org).
+      * If you represent your institution, you can request a community account [here](https://projectredcap.org/resources/community/)
+   * If you are not affiliated with an institution that has a license with REDCap, you CANNOT access the source code and will be unable to use this tool.  You can contact REDCap to request a license [here](https://projectredcap.org/partners/join/).
 1. Configure REDCap
    * At this point, we assume that you have a running set of containers.  Use the REDCap Setup tool to complete your
     installation.  Please note that you DO NOT need to create a new database user as the `.env` and setup scripts for
     MySql have already done so.  You can find the usernames and passwords in the `.env` file.
 
+
+### SSL Setup (optional)
+If you would like to be able to access your localhost docker instance of REDCap via SSL, follow the following steps.
+
+(This is based on an article from https://dockerwebdev.com/tutorials/docker-php-development/)
+
+#### Instructions
+I use [Homebrew](https://brew.sh/) for managing packages on my Mac laptop.  So, these instructions are based on using a Mac and having installed Brew previously.  If this isn't you, there are alternate install [instructions for mkcert](https://github.com/FiloSottile/mkcert#installation) that provide many other methods.
+
+```
+brew install mkcert nss
+mkcert -install
+```
+
+Next, make a locally trusted development certificate
+mkcert localhost 127.0.0.1 ::1 (or add any other names you want to call your local server).  In my case, I use `redcap.local`.
+
+```
+mkcert localhost 127.0.0.1 ::1 redcap.local
+```
+This will yield two new files in your current directory.  Rename and move these files to the docker-compose continer inside the `credentials` folder.
+```
+mv localhost+3.pem /path_to_redcap_docker_compose/credentials/cert.pem
+mv localhost+x-key.pem /path_to_redcap_docker_compose/credentials/cert-key.pem
+```
+
+Turn on the SSL site which is loaded in the `redcap-overrides/web/apache2/sites-available/ssl.conf` by setting
+the `.env` variable `WEB_ENABLE_SSL_SITE=true`
+
+Restart your docker containers with `docker compose down; docker compose up -d`
+
+Try accessing your localhost with https protocol!  If it works, you might need to change your `REDCap base URL` from http to https.
+
+#### Next Steps
+At this point, your local computer can connect to your locally running docker over https without warnings. This is because your local computer 'trusts' the signer which is itself.  However, if your docker container trys to call itself or if the cron container were to try to call the web container with https, it would fail.  This seldom happens, but some EM code calls the server itself and could end up trying to use https.  To enable the docker web container to trust the certs we created on your laptop we have one more optional step.
+
+Find the location of the root certificate used by mkcert on your local computer. This is done with:
+```
+mkcert -CAROOT
+```
+It will give a path like `/Users/you/Library/Application Support/mkcert`.  
+Inside that folder is a file called `rootCA.pem`.  Lets copy that file to the `credentials` folder and *rename* it to `rdc_rootCA.pem`.
+```
+cp /Users/you/Library/Application Support/mkcert/rootCA.pem /path_to_redcap_docker_compose/credentials/rdc_rootCA.pem
+```
+
+There is a script in the `redcap-overrides/web/startup-scripts` that will, if the file `rdc_rootCA.pem` exists, install the crt into the trusted root chain so it will accept localhost calls.  
+
+To test of this works, you can ssh into your web container and check.  First, make sure you restart your containers with a `docker-compose down; docker compose up -d;`.  Then, goto the `rdc/` directory and connect to the web container as follows below:
+Here is what it looks like when it isn't working:
+```
+$ docker compose exec web /bin/bash
+root@7aeb61f66236:/var/www/html# cd /tmp
+root@7aeb61f66236:/tmp# wget https://localhost
+--2024-10-23 16:06:02--  https://localhost/
+Resolving localhost (localhost)... ::1, 127.0.0.1
+Connecting to localhost (localhost)|::1|:443... failed: Connection refused.
+Connecting to localhost (localhost)|127.0.0.1|:443... connected.
+ERROR: The certificate of 'localhost' is not trusted.
+ERROR: The certificate of 'localhost' doesn't have a known issuer.
+```
+And, after:
+```
+--2024-10-23 16:47:50--  https://localhost/
+Resolving localhost (localhost)... ::1, 127.0.0.1
+Connecting to localhost (localhost)|::1|:443... failed: Connection refused.
+Connecting to localhost (localhost)|127.0.0.1|:443... connected.
+```
 
 ### X-Debug Configuration (optional)
 X-Debug allows you to insert breakpoints in your php code and evaluate variables from the server in your IDE.  It has a small
@@ -173,6 +255,87 @@ to try and learn how to use this tool.
 * Note: If you want to debug cron calls, you may have to do more!
   * When the cron container calls the web container it uses the url of  `http://web/cron.php`.  So, your xdebug server will not have a 'server' defined with a host of `web`.  So, in my case, I made aq second Server (step 2 above) also called web with the same configuration.
   * Alternately, you could disable the cronjob container with `docker compose stop cron` at the command prompt in the rdc folder and just make calls to the cron endpoint manually from your local browser (e.g. `http://localhost/cron.php` to trigger and test a cron job.  In this case, your normal xdebug server settings should capture the event)
+5.  Xdebug's default mode is "debug". To profile the code instead of debug
+   1. Create a new file "/usr/local/etc/php/conf.d/81-xdebug.ini"
+   2. Edit the file to include the line
+      1. xdebug.mode=profile
+   3. Restart apache
+      1. /etc/init.d/apache2 restart
+   4. Set the Debug Browser Extension to "Profile". This may be optional.
+   5. The output is captured at /tmp/cachegrind.out.##.gz  (## refers to the numbers in the filename. One file is created per request)
+   6. Copy the profile data to where PHP Storm can read it (Choose your location)
+      1. cp /tmp/cachegrind.out.##.gz /var/www/html/
+      2. In PHPStorm click on "Tools" choose "Analyze Xdebug Profiler Snapshot..."
+      3. Choose the cachegrind.out file. No need to un-gzip it.
+
+
+#### Instructions for Visual Studio Code
+1. After your docker web container is up and running, you should have access to a xdebug information page here: [http://localhost/debug/xdebug_info.php](http://localhost/debug/xdebug_info.php)
+   - Note that the settings for xdebug defalt via the injected override file located here `/rdc/redcap-overrides/web/php/80-xdebug.ini`.  If you want to make changes, you can EITHER edit this file and change the master values, or you can override them using then `.env` XDEBUG environmental variable.  Be sure to run `docker compose down; docker compose up -d` after any changes and check the [xdebug_info]((http://localhost/debug/xdebug_info.php) page afterwards.
+1. In VS Code, install the OFFICIAL 'Php Debug' extension.  (has 12.5M installs as of 10/2024)
+1. For Chrome, install the [Xdebug helper extension](https://chromewebstore.google.com/detail/xdebug-helper/eadndfjplgieldjbigjakmdgkmoaaaoc?hl=en).  This will allow you to designate a page/session for debugging by setting a cookie
+1. The redcap-docker-compose repository already contains a .vscode folder with a launch.json which should create a launch open for starting a debug session.  To do this:
+   - Click on the left-side 'Run and Debug' page in VSCODE that was added when you installed PHP Debug
+   - Click on the green play button for 'Listen for Xdebug'
+1. Now, goto your browser, using the new extension, set it to 'debug mode' and then refresh a page and you should see a debug session.   
+
+## Upgrading your REDCap-Docker-Compose localhost installation
+This new section is designed to help you perform an upgrade from an older version of REDCap Docker Compose.  For clarity, I will refer
+to the current folder where your old/existing redcap-docker-compose is located as `~/old_rdc/` so the folder with the `docker-compose.yml`
+would be in `~/old_rdc/rdc/`.
+
+These are step-by-step - please reach out on the community consortium if you are having trouble.
+
+### Backup your current database
+Your current mysql database is stored on a docker volume.  We are going to use the `db` container to generate a `.sql.gz` backup and copy it to your host laptop.  In older versions of rdc, the database container mounted its logs as `~/old_rdc/logs/mysql` or `~old_rdc/logs/`.  If you look there, you should see a `mysql_error.log` or `mysql_slow.log` file.
+1. Make sure your old redcap docker compose is running (e.g. you can access your local redcap).
+1. Backup your current redcap-docker-compose database with the following commands: 
+```
+# Goto the folder with the docker-compose.yml file
+$ cd ~/old_rdc/rdc
+
+# Depending on how your LOGS_DIR is mounted to the db container, one of the following two commands should work to create a backup:
+# For newer versions where the db container has logs mounted as: ${LOGS_DIR}:/var/log, this should work:
+$ docker compose exec db bash -c 'mysqldump -u root --password=$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE | gzip > /var/log/${DOCKER_PREFIX}_redcap_db_$(date +%Y-%m-%d_%H%M%S).sql.gz'
+
+# Alternately, for older versions of rdc, where the logs are mounted as ${LOGS_DIR}/mysql:/var/log or ${LOGS_DIR}/mysql:/var/log/mysql, this might work:
+$ docker compose exec db bash -c 'mysqldump -u root --password=$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE | gzip > /var/log/mysql/${DOCKER_PREFIX}_redcap_db_$(date +%Y-%m-%d_%H%M%S).sql.gz'
+```
+1. Check your `~/old_rdc/logs/...` directory and try to find the new `.sql.gz` backup.  This command might take a while if your database is large.
+1. Shut down your old rdc setup with `~/old_rdc/rdc> docker compose down`
+
+### Download and start the new REDCap Docker Compose
+1. You can pull from the master branch or pick a newer release.  I would default to trying the master branch, but it is up to you.  In most cases, you want to pull the 'zip' version and not clone the repo unless you plan to make pull requests.  Let's then unzip it into a new folder, e.g. `~/REDCap_2025_01/`.  
+
+1. Set up the new `.env` file.  Copy `.env-example` to `.env` and set up all the values.
+1. **Make sure the value for the `DOCKER_PREFIX` variable in the new `.env` is different than in your old one.** This will ensure you don't accidentally overwrite a docker volume that might contain data from your previous RDC install.
+```
+$ cat .env | grep "DOCKER_PREFIX"
+DOCKER_PREFIX=rc_v2 (or whatever)
+```
+1. Turn on your new rdc with `docker compose up`.  This should create an empty database and you should be able to access the setup page at `http://localhost`.
+
+### Import your database backup
+1. Copy the `.sql.gz` backup created from your old instance to the `logs` directory of the new rdc folder (and rename it `redcap_restore.sql.gz`).
+```
+$ cp /path/to/old_rdc/logs/(?mysql)/prefix_redcap_db_2024-xx-xx_xxxxxx.sql.gz /path/to/latest/redcapdockercompose/logs/redcap_restore.sql.gz
+```
+1. Next, lets tell the database container to import the backup:
+```
+~/new_rdc/rdc> $ docker compose exec db bash -c 'zcat /var/log/redcap_restore.sql.gz | mysql -u root --password=$MYSQL_ROOT_PASSWORD ${MYSQL_DATABASE}'
+```
+This might take a while, but when done you should see all your database tables.  You can verify with `http://localhost/debug/adminer.php` and then use `db` as the server name and `root` / `root` as the user/password.
+
+### Copy over your www directory
+If all worked, your new rdc instance is a copy of your old database, but it is missing the www directory.  So, copy over all the /www/ files from the old install to the new one.
+1. Copy files (via command line or by drag and drop)
+```
+$ cp -r /path/to/old/rdc/www/* /path/to/latest/redcapdockercompose/rdc/www
+```
+
+### Test if all is working!
+Now, you should be ready to go with the new version.  If you don't like what you get, you can always shut it down (e.g. `docker compose down`) and start up the old one again.  Or, if you want to run both instances simultaneously, you simply need to change the values for the `WEB_PORT` and `WEB_SSL_PORT` and `MYSQL_PORT` in the `.env` files so they do not overlap and you can run both versions at the same time on different ports (but you might need to change your `REDCap base URL` in control center / general configuration)
+
 
 ## FAQ and Other Information
 
@@ -227,12 +390,23 @@ command to look like this:
     image: arm64v8/phpmyadmin
 ```
 
+### Adminer
+Adminer is an alternate solution for phpMyAdmin since phpMyAdmin is no longer supported and maintained.  I selected a fork of
+adminer here [https://github.com/adminerevo/adminerevo/](https://github.com/adminerevo/adminerevo/) and the setup process copies the file to the /debug/ folder of your local server on setup.
+
+You can access adminer at http://localhost/debug/adminer.php.
+
+The first time you use adminer, you will have to connect.  Server = `db` (this is the name inside the redcap-docker network as defined in the `docker-compose.yml` file), Username, Password, and Database are all specified in your `.env` file. 
+
+If you are using an older install of redcap-docker-compose, you may have to copy over the debug folder from /rdc/redcap-overrides/web/webroot/ to your local webroot at /www/.
+
 ### How do I stop phpMyAdmin
 If you have another mysql admin tool you'd prefer to use, you can prevent your docker-compose from instantiating the
 phpMyAdmin container.  Either:
 * After startup (e.g. `docker-compose up -d`) you could run `docker-compose stop phpmyadmin`
 * Alternately, you can comment out the phpmyadmin section of the `docker-compose.yml` file with `#` before each line.
   If you don't use it, you might as well turn it off so it isn't running all the time.
+* NOTE that phpMyAdmin is commented out by default since the introduction of adminer.  You will have to edit your docker-compose.yml file to re-enable the phpMyAdmin container
 
 ### Connecting to the database
 There are at least three ways to connect to your database:
@@ -256,9 +430,9 @@ mysql>
 ### Local URLS
 * You can access your webroot at [http://localhost](http://localhost/) or [http://127.0.0.1](http://127.0.0.1/)
    * If this isn't working, see FAQ below
-* You can access your mailhog at [http://localhost/mailhog/](http://localhost/mailhog/)
+* You can access your mail via proxy at [http://localhost/mail/](http://localhost/mail/)
    * (don't forget the trailing slash)
-* You can access your phpMyAdmin at [http://localhost/phpmyadmin/](http://localhost/phpmyadmin/)
+* You can access your phpMyAdmin via proxy at [http://localhost/phpmyadmin/](http://localhost/phpmyadmin/)
    * (don't forget the trailing slash)
 
 
@@ -306,12 +480,12 @@ located (unless you specify additional parameters).
      files and need those changes to be incorporated into the containers -- otherwise your changes will not appear in the
      running images.
    * `docker-compose up -d --no-deps --build <CONTAINER_NAME>` - If you just want to rebuild one container and not all
-     of them. Valid names are `web`, `db`, `cron`, `mailhog`, `phpmyadmin` and `startup`)
+     of them. Valid names are `web`, `db`, `cron`, `mailpit`, `phpmyadmin` and `startup`)
    * `docker-compose stop` - this will stop the docker process (which would be good to do if you want to save battery)
    * `docker-compose down` - this will stop **and remove** the containers - meaning the next time you call up they will be
      recreated (this is similar to the --force-recreate tag)
    * `docker-compose down -v` - this will stop and remove the containers *along with their internal volumes*.  For
-     example, if you call this any saved email messages from mailhub would be removed.
+     example, if you call this any saved email messages would be removed.
    * `docker ps` - shows you all running containers - see the docker command reference
    * `docker ps -a` - shows you all running *and stopped* containers.
 
@@ -332,9 +506,9 @@ As of this writing, these ports are defined in .env
 
 ```
 WEB_PORT=80
+WEB_SSL_PORT=443
 MYSQL_PORT=3306
 PHPMYADMIN_PORT=8080
-MAILHOG_PORT=8025
 ```
 
 When you go to pick port numbers, it is generally safest to pick from the range 1024 - 65535. Each of the values selected for these port numbers needs to be unique to across the running instances.
@@ -346,7 +520,6 @@ DOCKER_PREFIX=rc942
 WEB_PORT=1942
 MYSQL_PORT=2942
 PHPMYADMIN_PORT=3942
-MAILHOG_PORT=4942
 ```
 
 You can paste a block of parameters like this at the end of the .env file to override all of the parameters above.
@@ -379,11 +552,10 @@ You can shut down your servers by pressing ctrl-c in the window where you ran `d
 ```
 ^CGracefully stopping... (press Ctrl+C again to force)
 Stopping redcap ... done
-Stopping mailhog ... done
 ```
 
-This stops your running containers but does not delete them.  They are still there on your machine and will be
-restarted when you run `docker-compose up` again.  You can remove them (but not the volumes) with `docker-compose rm`.
+This stops your running containers but does not delete them.   If you run `docker-compose up` again, they will resume.
+You can remove the containers by `docker-compose down` or `docker-compose rm`.
 Try restarting again with `docker-compose up -d` - it should be MUCH faster after the initial load.  Adding the `-d` means
 detached so you can close your terminal window and the service will continue to run.
 
@@ -391,7 +563,7 @@ detached so you can close your terminal window and the service will continue to 
 ### Logging into the server
 To get a bash shell as root in the redcap server, you can run:
 ```shell
-$ docker-compose exec web /bin/bash
+$ docker compose exec web /bin/bash
 root@5af71d765e77:/#
 
 # become the apache user instead of root to avoid file permission issues
@@ -421,7 +593,6 @@ No, by default the database is stored in a docker volume.  You can see the docke
 andy123  redcap-docker-compose  rdc $ docker volume ls
 DRIVER              VOLUME NAME
 local               redcap_logs-volume
-local               redcap_mailhog-volume
 local               redcap_mysql-volume
 
 # Delete a volume (such as your mysql database)
@@ -561,3 +732,25 @@ or
 $ docker exec -it 1dc2023b8753 /var/www/html/bin/scan modules-lab/realtime_randomization_v9.9.9
 ```
 where 1dc... is the container ID from the `docker ps` command.
+
+### How do I work with git repositories as External Modules with Visual Studio Code (vsCode)?
+By default, Visual Studio only scans for git repositories in the root directory of your workspace.  So, if you have cloned a git repository for an external module into `www/modules/my_module_v0.0.0` it will NOT appear as a git module in vsCode by default.  This can thankfully be easily fixed.
+1. Open your vsCode settings (command-comma) and search for `git.repositoryScanMaxDepth` - change it from 1 (default) to 3
+1. Restart your vsCode project and it should now detect the git repos for your EMs.
+
+### Any advice about working with repos you've cloned from GIT?
+Funny you should ask!  If I am making my own repo from GIT, I will typically create the repo and pull it into my modules folder with:
+```sh
+           > cd www/modules
+www/modules> git clone git@github.com:123andy/my_external_module.git my_external_module_v0.0.0
+```
+Note that I use version 0.0.0... This means I'm running off of a git repo and not from a fixed release.  After a while, you might end up with a lot of repos in your
+modules folder.  In order to pull all of them so they are up-to-date with the repo HEAD, I created a script that you can use.  First, you can check to see if you
+have any repos that need updating from the web browser via `http://localhost/debug/update_pull.php` -- this will just tell you what, if anything, needs updating.
+To actually do the update, you have to execute the command from the command line (because you might need to authenticate to github via ssh and the web container likely
+isn't authenticated).
+```sh
+         > cd www/debug
+www/debug> php update_pull.php          // This is a dry run and will not actually do any git pulls
+www/debug> php update_pull.php true     // This command will run git pull on any behind repo
+```
